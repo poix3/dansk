@@ -5,7 +5,7 @@
  * - 读取时取 savedAt 较新的一份；兼容旧版 dk_vocab_v1 数据
  */
 const Store = (() => {
-  const LS_KEY = 'dk_vocab_v1', DB_NAME = 'dk_vocab', OS = 'kv', SCHEMA = 2;
+  const LS_KEY = 'dk_vocab_v1', DB_NAME = 'dk_vocab', OS = 'kv', SCHEMA = 3;
   const DEFAULT_SETTINGS = { key: '', model: 'gemini-2.5-flash', ttsModel: 'gemini-3.8-flash-tts', voice: 'Kore' };
   const state = {
     cards: [],
@@ -28,7 +28,16 @@ const Store = (() => {
     c.warnings = Array.isArray(c.warnings) ? c.warnings : [];
     if (!c.gender || c.gender === 'null') c.gender = null;
     c.posKey = c.posKey || guessPosKey(c.pos);
-    c.ease = c.ease || 2.5; c.interval = c.interval || 0; c.reps = c.reps || 0; c.due = c.due || 0;
+    // 复习进度：每个方向（fw 丹→中，rv 中→丹）各自独立。旧版卡片的进度归入 fw
+    const blank = () => ({ ease: 2.5, interval: 0, reps: 0, due: 0, last: 0, new: true });
+    if (!c.srs) {
+      c.srs = {
+        fw: { ease: c.ease || 2.5, interval: c.interval || 0, reps: c.reps || 0, due: c.due || 0, last: 0, new: c.new === undefined ? !(c.reps > 0) : !!c.new },
+        rv: blank(),
+      };
+    }
+    c.srs.fw = Object.assign(blank(), c.srs.fw); c.srs.rv = Object.assign(blank(), c.srs.rv);
+    delete c.ease; delete c.interval; delete c.reps; delete c.due; delete c.new;
     c.added = c.added || Date.now();
     return c;
   }

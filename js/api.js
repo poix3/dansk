@@ -13,6 +13,9 @@ const Gemini = (() => {
   const SCHEMA = {
     type: 'OBJECT',
     properties: {
+      is_valid: { type: 'BOOLEAN' },
+      reject_reason: { type: 'STRING' },
+      suggestion: { type: 'STRING' },
       lemma: { type: 'STRING' },
       posKey: { type: 'STRING', enum: ['noun', 'verb', 'adjective', 'adverb', 'other'] },
       pos: { type: 'STRING' },
@@ -26,11 +29,27 @@ const Gemini = (() => {
       confidence: { type: 'STRING', enum: ['high', 'medium', 'low'] },
       note: { type: 'STRING' },
     },
-    required: ['lemma', 'posKey', 'pos', 'gender', 'meaning_zh', 'meaning_en', 'forms', 'examples', 'confidence'],
+    propertyOrdering: ['is_valid', 'reject_reason', 'suggestion', 'lemma', 'posKey', 'pos', 'gender', 'ipa', 'meaning_zh', 'meaning_en', 'forms', 'examples', 'collocations', 'confidence', 'note'],
+    // 全部必填：模型不能只填几个字段就交差；无效输入时用空字符串/空数组占位
+    required: ['is_valid', 'reject_reason', 'suggestion', 'lemma', 'posKey', 'pos', 'gender', 'ipa', 'meaning_zh', 'meaning_en', 'forms', 'examples', 'collocations', 'confidence', 'note'],
   };
 
+  class RejectError extends Error {}
+
+  /* 本地预检：在调用 API 之前拦掉明显不是丹麦语单词的输入，返回错误说明或 null */
+  function precheck(w) {
+    if (w.length > 40) return '太长了，请一次输入一个词或短词组';
+    if (w.split(/\s+/).length > 4) return '只支持单词或短词组，不支持句子';
+    if (!/^[\p{Script=Latin}\s'’.-]+$/u.test(w)) return '只能输入丹麦语（拉丁字母），不能包含汉字、数字或符号';
+    if (!/[aeiouyæøå]/i.test(w)) return '看起来不是单词（没有元音）';
+    if (/(.)\1{3,}/i.test(w)) return '有连续重复的字符，请检查拼写';
+    return null;
+  }
+
   function buildPrompt(word, problems) {
-    return `你是严谨的丹麦语词典编辑。词条：“${word}”。如果它是变形，请还原为原形（lemma）。
+    return `你是严谨的丹麦语词典编辑。输入：“${word}”。
+第一步，判断它是不是真实存在的丹麦语单词或常用词组（变形也算）。如果是随机字符、其他语言的词、无法确定的拼写错误，或根本不是词，把 is_valid 设为 false，用中文在 reject_reason 里说明原因；如果明显是拼写错误，在 suggestion 里给出最可能的正确丹麦语词。绝不要为了完成任务而给无意义的输入编造释义。is_valid 为 false 时，其余字段用空字符串或空数组占位（gender 填 none，posKey 填 other，confidence 填 low）。\nis_valid 为 true 时，所有字段都必须完整填写：中文释义、英文释义、IPA、按词性要求的全部变形、2-3 个例句、搭配、置信度，不能留空。
+第二步（is_valid 为 true 时）：如果输入是变形，请还原为原形（lemma），并填写词条。
 规则：
 - 名词：gender 为 en 或 et；forms 必须含 单数定指、复数不定、复数定指。
 - 动词：forms 必须含 不定式、现在时、过去时、完成时（带 har/er）、命令式。
@@ -69,7 +88,7 @@ const Gemini = (() => {
     return { errors, warnings };
   }
 
-  async function callOnce(prompt) {
+  async function callOnce(prompt, notify) {
     const { key, model } = Store.state.settings;
     for (let i = 0; i < 4; i++) {
       let r;
@@ -82,8 +101,12 @@ const Gemini = (() => {
             generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.2 },
           }),
         });
-      } catch (e) { await sleep(2000 * (i + 1)); continue; } // 网络抖动
-      if (r.status === 429 || r.status >= 500) { await sleep(r.status === 429 ? 15000 : 3000 * (i + 1)); continue; }
+      } catch (e) { notify?.(`网络出错，${2 * (i + 1)} 秒后重试…`); await sleep(2000 * (i + 1)); continue; } // 网络抖动
+      if (r.status === 429 || r.status >= 500) {
+        const ms = r.status === 429 ? 15000 : 3000 * (i + 1);
+        notify?.(r.status === 429 ? '请求太频繁，15 秒后重试…' : `服务暂时不可用，${ms / 1000} 秒后重试…`);
+        await sleep(ms); continue;
+      }
       if (!r.ok) throw new Error('API ' + r.status + '：' + (await r.text()).slice(0, 120));
       const j = await r.json();
       const txt = j.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
@@ -93,12 +116,20 @@ const Gemini = (() => {
   }
 
   /* 生成并校验，返回规范化后的词条数据（不含 SRS 字段） */
-  async function generate(word) {
+  async function generate(word, notify) {
+    const bad = precheck(word);
+    if (bad) throw new RejectError(bad);
     let problems = [], last = null;
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
       let d;
-      try { d = await callOnce(buildPrompt(word, problems)); }
+      if (i) notify?.(`结果未通过校验，重新生成（第 ${i + 1} 次）…`);
+      try { d = await callOnce(buildPrompt(word, problems), notify); }
       catch (e) { if (e instanceof SyntaxError) { problems = ['输出不是合法 JSON']; continue; } throw e; }
+      if (d?.is_valid === false) {
+        throw new RejectError('不像丹麦语单词：' + (d.reject_reason || '无法识别') + (d.suggestion ? `。你是想输入「${d.suggestion}」吗？` : ''));
+      }
+      const bl = d?.lemma && precheck(d.lemma);
+      if (bl) { problems = ['lemma 不是合法的丹麦语词：' + bl]; continue; }
       const { errors, warnings } = validate(d);
       last = { d, errors, warnings };
       if (!errors.length) return finalize(d, warnings);
@@ -124,5 +155,5 @@ const Gemini = (() => {
     };
   }
 
-  return { generate, validate };
+  return { generate, validate, precheck, RejectError };
 })();

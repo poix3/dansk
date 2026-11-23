@@ -13,19 +13,19 @@
 <div class="banner" id="banner" hidden></div>
 
 <section id="t-lib">
-  <div class="bar">
-    <input id="q" placeholder="搜索词库">
-    <button class="pri" id="toggleAdd" aria-label="添加单词">＋</button>
-  </div>
-  <div class="addbox" id="addbox" hidden>
-    <textarea id="words" placeholder="每行一个词，变形也可以（如 spiste、bilerne），会自动还原成原形"></textarea>
-    <div class="row">
-      <button class="pri" id="go">生成词条</button>
-      <button id="stop">停止</button>
-      <button id="retry" hidden>重试失败项</button>
-    </div>
+  <form class="searchbar" id="searchform" autocomplete="off">
+    <input id="q" type="text" enterkeyhint="send" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="搜索词库，或输入新单词">
+    <button class="pri" id="go" type="submit">添加</button>
+  </form>
+  <p class="hint" id="hint" hidden></p>
+  <div class="jobpanel" id="jobpanel" hidden>
     <div class="progress"><div id="bar"></div></div>
     <ul class="joblist" id="jobs"></ul>
+    <div class="row">
+      <button class="small" id="stop" type="button" hidden>停止</button>
+      <button class="small" id="retry" type="button" hidden>重试失败项</button>
+      <button class="small" id="clearjobs" type="button" hidden>关闭</button>
+    </div>
   </div>
   <div class="filters" id="filters"></div>
   <div id="list"></div>
@@ -48,8 +48,8 @@
   <select id="voice"></select>
   <div class="row"><button class="pri" id="save">保存设置</button><button id="testVoice">试听</button></div>
   <h2>备份</h2>
-  <p class="mute">iPhone 上网页数据可能被系统清理。点「导出到文件」，在分享菜单选「存储到文件」→ iCloud Drive，始终覆盖同一个 danish-vocab.json 即可。换设备或数据丢失时，用「导入」选这个文件。</p>
-  <div class="row"><button id="exp">导出到文件</button><button id="imp">导入</button></div>
+  <p class="mute">iPhone 上网页数据可能被系统清理。点「导出」，在分享菜单选「存储到文件」→ iCloud Drive，始终覆盖同一个 danish-vocab.json 即可。换设备或数据丢失时，用「导入」选这个文件。</p>
+  <div class="row"><button id="exp">导出</button><button id="imp">导入</button></div>
   <input id="file" type="file" accept=".json" hidden>
   <div class="mute" id="storage" style="white-space:pre-wrap"></div>
   <div class="mute" id="setlog"></div>
@@ -60,7 +60,7 @@
 
 <nav>
   <button data-t="lib">词库</button>
-  <button data-t="rev">复习<span class="badge" id="revbadge"></span></button>
+  <button data-t="rev">复习</button>
   <button data-t="set">设置</button>
 </nav>
 

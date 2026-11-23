@@ -9,20 +9,14 @@ const App = (() => {
     window.scrollTo(0, 0);
   }
 
-  function refreshBadge() {
-    const n = ReviewView.dueCount();
-    $('#revbadge').textContent = n > 99 ? '99+' : n || '';
-  }
-
   async function start() {
     await Store.load();
     Object.values(views).forEach(v => v.init());
     document.querySelectorAll('nav button').forEach(b => b.onclick = () => tab(b.dataset.t));
-    refreshBadge();
     tab('lib');
   }
 
-  return { tab, refreshBadge, start };
+  return { tab, start };
 })();
 
 App.start();

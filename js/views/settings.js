@@ -17,29 +17,38 @@ const SettingsView = (() => {
     return new File([JSON.stringify(data, null, 1)], FILE, { type: 'application/json' });
   }
 
+  // iPhone/iPad：系统分享面板（选「存储到文件」→ iCloud Drive）；其他设备：直接下载
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
   async function exportBackup() {
     const f = backupFile();
     try {
-      if (navigator.canShare?.({ files: [f] })) {
-        await navigator.share({ files: [f], title: FILE }); // iOS 分享菜单里选「存储到文件」
+      if (isIOS) {
+        if (!navigator.canShare?.({ files: [f] })) throw new Error('此浏览器不支持分享文件');
+        await navigator.share({ files: [f], title: FILE });
       } else {
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(f); a.download = FILE; a.click();
+        a.href = URL.createObjectURL(f); a.download = FILE;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
       }
-    } catch (e) { if (e.name === 'AbortError') return; toast('导出失败：' + e.message); return; }
+    } catch (e) {
+      if (e.name === 'AbortError') return; // 用户自己取消，不算失败
+      toast('导出失败：' + (e.message || e.name), 4000);
+      return;
+    }
     Store.state.lastBackup = Date.now(); Store.save(); status();
   }
 
-  /* 导入 = 合并到当前唯一的库：按词条去重；同一词两边都有时保留学习进度更多的那份进度 */
+  /* 导入 = 合并到当前唯一的库：按词条去重；同一词两边都有时保留学习进度更多的那份 */
+  const reps = c => c.srs.fw.reps + c.srs.rv.reps;
   function merge(cards) {
     let added = 0, updated = 0;
     cards.forEach(raw => {
       if (!raw?.lemma) return;
       const mine = Store.findByLemma(raw.lemma), c = Store.normalize(raw);
       if (!mine) { Store.state.cards.push(c); added++; }
-      else if (c.reps > mine.reps) {
-        Object.assign(mine, { reps: c.reps, ease: c.ease, interval: c.interval, due: c.due, new: c.new }); updated++;
-      }
+      else if (reps(c) > reps(mine)) { mine.srs = c.srs; updated++; }
     });
     return { added, updated };
   }
@@ -65,7 +74,7 @@ const SettingsView = (() => {
         const d = JSON.parse(await e.target.files[0].text());
         if (!Array.isArray(d.cards)) throw 0;
         const { added, updated } = merge(d.cards);
-        Store.save(); App.refreshBadge(); LibraryView.render();
+        Store.save(); LibraryView.render();
         $('#setlog').textContent = `导入完成：新增 ${added} 张，更新学习进度 ${updated} 张。`;
       } catch (err) { $('#setlog').textContent = '导入失败：文件格式不对'; }
       e.target.value = '';

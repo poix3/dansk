@@ -80,9 +80,6 @@ summary{cursor:pointer;font-weight:600}
 .tap{cursor:pointer}
 
 /* 简洁化：词库顶栏、去掉多余边框 */
-.bar{display:flex;gap:8px}
-.bar button{width:44px;font-size:20px;line-height:1;padding:0}
-.addbox{margin:12px 0}
 details{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 2px;margin:0}
 details[open]{padding-bottom:14px}
 summary{font-weight:500;list-style:none;display:flex;gap:10px;align-items:baseline}
@@ -93,3 +90,23 @@ summary .mute{margin-left:auto;text-align:right}
 .card{border-radius:14px}
 .tag{background:none;border:1px solid var(--line);color:var(--mute)}
 .tag.warn{border-color:var(--warn)}
+
+
+/* 词库顶部：搜索 + 添加 */
+[hidden]{display:none!important}
+.searchbar{display:flex;gap:8px}
+.searchbar button{min-width:64px}
+.hint{color:var(--red);font-size:14px;margin:8px 2px 0}
+.jobpanel{margin:12px 0;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+.jobpanel .progress{margin:2px 0 8px}
+.jobpanel .row{margin:8px 0 0}
+.joblist li{flex-wrap:wrap;align-items:baseline}
+.joblist li .w{font-weight:600}
+.joblist li .msg{flex-basis:100%;margin:0 0 0 1.9em;text-align:left;font-size:13px;word-break:break-word}
+.joblist li .msg:empty{display:none}
+.joblist li span.spin{box-sizing:border-box;width:13px;height:13px;margin:4px 3px 0;border:2px solid var(--line);border-top-color:var(--red);border-radius:50%;animation:sp .8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{margin-top:18px;text-align:center}
+
+.dirtag{font-size:13px;color:var(--mute);margin:2px 2px 0}
+.word.zh{font-family:inherit;font-size:28px}

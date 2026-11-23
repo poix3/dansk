@@ -1,56 +1,76 @@
-/* 添加单词页 */
+/* 添加单词：搜索框里输入内容，点「添加」生成词条（Enter 同样触发） */
 const AddView = (() => {
   let stopFlag = false, running = false, jobs = [];
 
-  const ICON = { wait: '·', run: '…', ok: '✓', dup: '=', fail: '✗' };
+  const ICON = { wait: '·', ok: '✓', dup: '＝', fail: '✗' };
+  const splitWords = t => [...new Set(t.split(/[\n,;，；]+/).map(w => w.trim()).filter(Boolean))];
 
   function draw() {
-    const done = jobs.filter(j => j.s !== 'wait' && j.s !== 'run').length;
+    const done = jobs.filter(j => !['wait', 'run'].includes(j.s)).length;
+    $('#jobpanel').hidden = !jobs.length;
     $('#bar').style.width = jobs.length ? (done / jobs.length * 100) + '%' : '0';
-    $('#jobs').innerHTML = jobs.map(j =>
-      `<li><span class="${j.s === 'ok' ? 'ok' : j.s === 'fail' ? 'err' : ''}">${ICON[j.s]}</span><span>${esc(j.label)}</span><span class="msg ${j.s === 'fail' ? 'err' : ''}">${esc(j.msg || '')}</span></li>`).join('');
-    $('#retry').hidden = running || !jobs.some(j => j.s === 'fail');
+    $('#jobs').innerHTML = jobs.map(j => {
+      const icon = j.s === 'run' ? '<span class="spin"></span>' : `<span class="${j.s === 'ok' ? 'ok' : j.s === 'fail' ? 'err' : ''}">${ICON[j.s]}</span>`;
+      const msg = j.s === 'run' ? (j.msg || '正在生成…') : j.msg || '';
+      return `<li class="${j.s}">${icon}<span class="w">${esc(j.label)}</span><span class="msg ${j.s === 'fail' ? 'err' : ''}">${esc(msg)}</span></li>`;
+    }).join('');
+    $('#retry').hidden = running || !jobs.some(j => j.s === 'fail' && !j.final);
+    $('#stop').hidden = !running;
+    $('#clearjobs').hidden = running;
+    $('#go').disabled = running;
+    $('#go').textContent = running ? `生成中 ${Math.min(done + 1, jobs.length)}/${jobs.length}` : '添加';
   }
 
   async function run(list) {
-    const S = Store.state;
-    if (!S.settings.key) { toast('请先在「设置」里填写 Gemini API key'); return App.tab('set'); }
-    $('#addbox').hidden = false;
-    stopFlag = false; running = true; $('#go').disabled = true; $('#stop').disabled = false;
+    stopFlag = false; running = true;
     jobs = list.map(w => ({ word: w, label: w, s: 'wait' })); draw();
     for (const j of jobs) {
-      if (stopFlag) break;
+      if (stopFlag) { j.msg = '已停止'; continue; }
       j.s = 'run'; draw();
       try {
-        const d = await Gemini.generate(j.word);
-        j.label = d.lemma === j.word ? j.word : `${j.word} → ${d.lemma}`;
-        if (Store.findByLemma(d.lemma)) { j.s = 'dup'; j.msg = '已存在'; }
+        const known = Store.findByLemma(j.word); // 已有的词不用再调用 API
+        if (known) { j.s = 'dup'; j.label = known.lemma; j.msg = '词库里已经有了'; }
         else {
-          Store.state.cards.push(Store.normalize(Object.assign(d, { id: Date.now() + Math.random(), added: Date.now(), new: true })));
-          Store.save(); LibraryView.render();
-          j.s = 'ok'; j.msg = d.warnings.length ? '⚠ 待核对' : '';
+          const d = await Gemini.generate(j.word, m => { j.msg = m; draw(); });
+          j.label = d.lemma.toLowerCase() === j.word.toLowerCase() ? d.lemma : `${j.word} → ${d.lemma}`;
+          if (Store.findByLemma(d.lemma)) { j.s = 'dup'; j.msg = '词库里已经有了'; }
+          else {
+            Store.state.cards.push(Store.normalize(Object.assign(d, { id: Date.now() + Math.random(), added: Date.now(), new: true })));
+            Store.save(); LibraryView.render();
+            j.s = 'ok'; j.msg = d.warnings.length ? '已添加，⚠ 待核对' : '已添加';
+          }
         }
-      } catch (e) { j.s = 'fail'; j.msg = e.message.slice(0, 80); }
+      } catch (e) {
+        j.s = 'fail'; j.msg = e.message;
+        j.final = e instanceof Gemini.RejectError; // 输入本身有问题，重试没意义
+      }
       draw();
-      await sleep(800);
+      if (j.s !== 'dup') await sleep(600);
     }
-    running = false; $('#go').disabled = false; $('#stop').disabled = true;
-    const ok = jobs.filter(j => j.s === 'ok').length;
-    draw(); App.refreshBadge();
-    toast(`完成，新增 ${ok} 个`);
+    running = false; draw();
+    const failed = jobs.filter(j => j.s === 'fail').map(j => j.word);
+    $('#q').value = failed.join(', '); // 失败的留在输入框里方便修改
+    LibraryView.render();
   }
 
+  function submit(e) {
+    e.preventDefault();
+    if (running) return;
+    const words = splitWords($('#q').value);
+    if (!words.length) return showHint('先输入要添加的单词，多个词用逗号分隔');
+    if (!Store.state.settings.key) { showHint('还没有设置 Gemini API key，请到「设置」里填写'); return; }
+    showHint('');
+    run(words);
+  }
+
+  function showHint(t) { const h = $('#hint'); h.textContent = t; h.hidden = !t; }
+
   function init() {
-    $('#go').onclick = () => {
-      const words = [...new Set($('#words').value.split(/\n+/).map(w => w.trim()).filter(Boolean))];
-      if (!words.length) return;
-      $('#words').value = '';
-      run(words);
-    };
-    $('#retry').onclick = () => run(jobs.filter(j => j.s === 'fail').map(j => j.word));
+    $('#searchform').onsubmit = submit;
+    $('#q').addEventListener('input', () => showHint(''));
+    $('#retry').onclick = () => { const l = jobs.filter(j => j.s === 'fail' && !j.final).map(j => j.word); if (l.length) run(l); };
     $('#stop').onclick = () => { stopFlag = true; };
-    $('#stop').disabled = true;
-    $('#toggleAdd').onclick = () => { const b = $('#addbox'); b.hidden = !b.hidden; if (!b.hidden) $('#words').focus(); };
+    $('#clearjobs').onclick = () => { jobs = []; draw(); };
   }
 
   function show() {
