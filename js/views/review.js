@@ -32,6 +32,7 @@ const ReviewView = (() => {
 
   function next() {
     cur = pick(); flipped = false;
+    if (cur) TTS.prefetch(cur.c.lemma); // 提前准备好这个词的发音，点 🔊 时通常已在缓存里
     $('#revh').textContent = count ? `复习（本次 ${count}）` : '复习';
     if (!cur) {
       $('#rev').innerHTML = '<div class="card"><p><b>词库还是空的</b></p><p class="mute">先去「词库」页添加一些单词吧。</p></div>';

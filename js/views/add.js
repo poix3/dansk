@@ -21,22 +21,37 @@ const AddView = (() => {
     $('#go').textContent = running ? `生成中 ${Math.min(done + 1, jobs.length)}/${jobs.length}` : '添加';
   }
 
+  let shown = ''; // 我们最后写进输入框的内容；用户改过就不再覆盖
+  /* 成功/已存在的词从输入框移除；没处理完和失败的留着，方便修改重试 */
+  function syncInput() {
+    const q = $('#q');
+    if (q.value !== shown) return;
+    shown = q.value = jobs.filter(j => ['wait', 'run', 'fail'].includes(j.s)).map(j => j.word).join(', ');
+    LibraryView.render();
+  }
+  function dupJob(j, hit, typed) {
+    j.s = 'dup'; j.label = hit.card.lemma;
+    j.msg = hit.via ? `「${typed}」是「${hit.card.lemma}」的${hit.via}，词库里已有` : '词库里已经有了';
+  }
+
   async function run(list) {
+    shown = $('#q').value;
     stopFlag = false; running = true;
     jobs = list.map(w => ({ word: w, label: w, s: 'wait' })); draw();
     for (const j of jobs) {
       if (stopFlag) { j.msg = '已停止'; continue; }
       j.s = 'run'; draw();
       try {
-        const known = Store.findByLemma(j.word); // 已有的词不用再调用 API
-        if (known) { j.s = 'dup'; j.label = known.lemma; j.msg = '词库里已经有了'; }
+        const hit = Store.findByForm(j.word); // 原形或任意变形已在词库里：不用再调用 API
+        if (hit) dupJob(j, hit, j.word);
         else {
           const d = await Gemini.generate(j.word, m => { j.msg = m; draw(); });
           j.label = d.lemma.toLowerCase() === j.word.toLowerCase() ? d.lemma : `${j.word} → ${d.lemma}`;
-          if (Store.findByLemma(d.lemma)) { j.s = 'dup'; j.msg = '词库里已经有了'; }
+          const again = Store.findByForm(d.lemma);
+          if (again) dupJob(j, again, j.word);
           else {
             Store.state.cards.push(Store.normalize(Object.assign(d, { id: Date.now() + Math.random(), added: Date.now(), new: true })));
-            Store.save(); LibraryView.render();
+            Store.save();
             j.s = 'ok'; j.msg = d.warnings.length ? '已添加，⚠ 待核对' : '已添加';
           }
         }
@@ -44,13 +59,10 @@ const AddView = (() => {
         j.s = 'fail'; j.msg = e.message;
         j.final = e instanceof Gemini.RejectError; // 输入本身有问题，重试没意义
       }
-      draw();
-      if (j.s !== 'dup') await sleep(600);
+      draw(); syncInput();
+      if (j.s === 'ok') await sleep(600);
     }
-    running = false; draw();
-    const failed = jobs.filter(j => j.s === 'fail').map(j => j.word);
-    $('#q').value = failed.join(', '); // 失败的留在输入框里方便修改
-    LibraryView.render();
+    running = false; draw(); syncInput();
   }
 
   function submit(e) {

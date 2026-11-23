@@ -110,3 +110,11 @@ summary .mute{margin-left:auto;text-align:right}
 
 .dirtag{font-size:13px;color:var(--mute);margin:2px 2px 0}
 .word.zh{font-family:inherit;font-size:28px}
+
+/* 展开的词条：标题吸顶，随时可点它收起 */
+details[open] summary{position:sticky;top:0;z-index:2;background:var(--bg);padding:10px 0;margin:-12px 0 8px;border-bottom:1px solid var(--line)}
+details{scroll-margin-top:4px}
+
+.foldrow{display:flex;justify-content:flex-end;margin-top:18px}
+
+.say.on{background:var(--red);border-color:var(--red);color:#fff}

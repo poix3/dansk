@@ -67,6 +67,7 @@ const SettingsView = (() => {
       Store.save(); toast('已保存');
     };
     $('#testVoice').onclick = () => { $('#save').click(); TTS.speak('Hej, hvordan har du det i dag?'); };
+    $('#clearAudio').onclick = async () => { await TTS.clearCache(); toast('发音缓存已清除，下次点 🔊 会重新生成'); };
     $('#exp').onclick = exportBackup;
     $('#imp').onclick = () => $('#file').click();
     $('#file').onchange = async e => {

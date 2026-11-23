@@ -51,8 +51,10 @@ const Gemini = (() => {
 第一步，判断它是不是真实存在的丹麦语单词或常用词组（变形也算）。如果是随机字符、其他语言的词、无法确定的拼写错误，或根本不是词，把 is_valid 设为 false，用中文在 reject_reason 里说明原因；如果明显是拼写错误，在 suggestion 里给出最可能的正确丹麦语词。绝不要为了完成任务而给无意义的输入编造释义。is_valid 为 false 时，其余字段用空字符串或空数组占位（gender 填 none，posKey 填 other，confidence 填 low）。\nis_valid 为 true 时，所有字段都必须完整填写：中文释义、英文释义、IPA、按词性要求的全部变形、2-3 个例句、搭配、置信度，不能留空。
 第二步（is_valid 为 true 时）：如果输入是变形，请还原为原形（lemma），并填写词条。
 规则：
+- pos 和 forms 的 label 一律使用中文术语，禁止出现丹麦语或英文的语法术语（不要写 udsagnsord、Infinitiv、Nutid、Datid、Førnutid、perfect 等）。pos 只能是：名词、动词、形容词、副词、代词、介词、连词、感叹词、数词。label 必须原样使用下面规定的名称。
+- lemma 必须是词典原形：名词用单数不定形、不带冠词（bil，不是 en bil / bilerne）；动词用不带 at 的不定式（spise，不是 spiste / at spise）；形容词用基本形。
 - 名词：gender 为 en 或 et；forms 必须含 单数定指、复数不定、复数定指。
-- 动词：forms 必须含 不定式、现在时、过去时、完成时（带 har/er）、命令式。
+- 动词：forms 的 label 依次为 不定式、现在时、过去时、完成时（value 带 har/er）、命令式。
 - 形容词：forms 必须含 中性(-t)、复数/定指(-e)、比较级、最高级。
 - 其他词性：gender 填 none，forms 可为空数组。
 - 所有变形必须是真实存在的标准丹麦语形式（含不规则变化），不要按规则臆造；不确定就把 confidence 设为 low 并在 note 里说明。
@@ -140,14 +142,14 @@ const Gemini = (() => {
 
   function finalize(d, warnings) {
     return {
-      lemma: d.lemma.trim(),
+      lemma: d.lemma.trim().replace(/^(at|en|et)\s+(?=\S)/i, ''), // 防止模型带上 at/冠词
       posKey: d.posKey,
-      pos: d.pos,
+      pos: Store.canonPos(d.pos, d.posKey),
       gender: d.gender === 'none' ? null : d.gender,
       ipa: d.ipa || '',
       meaning_zh: d.meaning_zh.trim(),
       meaning_en: d.meaning_en || '',
-      forms: d.forms,
+      forms: d.forms.map(f => ({ label: Store.canonForm(f.label, d.posKey), value: f.value })),
       examples: d.examples,
       collocations: d.collocations || [],
       note: d.note || '',
