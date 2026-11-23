@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ordbog">
+<title>丹麦语单词本</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main>
+<div class="banner" id="banner" hidden></div>
+
+<section id="t-lib">
+  <div class="bar">
+    <input id="q" placeholder="搜索词库">
+    <button class="pri" id="toggleAdd" aria-label="添加单词">＋</button>
+  </div>
+  <div class="addbox" id="addbox" hidden>
+    <textarea id="words" placeholder="每行一个词，变形也可以（如 spiste、bilerne），会自动还原成原形"></textarea>
+    <div class="row">
+      <button class="pri" id="go">生成词条</button>
+      <button id="stop">停止</button>
+      <button id="retry" hidden>重试失败项</button>
+    </div>
+    <div class="progress"><div id="bar"></div></div>
+    <ul class="joblist" id="jobs"></ul>
+  </div>
+  <div class="filters" id="filters"></div>
+  <div id="list"></div>
+</section>
+
+<section id="t-rev">
+  <h2 id="revh">复习</h2>
+  <div id="rev"></div>
+</section>
+
+<section id="t-set">
+  <h2>设置</h2>
+  <p class="mute">Gemini API key 只保存在这台设备的浏览器里，不会上传到别处，也不会写入导出的备份。</p>
+  <input id="key" type="password" placeholder="Gemini API key" autocomplete="off">
+  <p></p>
+  <input id="model" placeholder="模型名">
+  <h2>发音（Gemini TTS）</h2>
+  <input id="ttsModel" placeholder="语音模型">
+  <p></p>
+  <select id="voice"></select>
+  <div class="row"><button class="pri" id="save">保存设置</button><button id="testVoice">试听</button></div>
+  <h2>备份</h2>
+  <p class="mute">iPhone 上网页数据可能被系统清理。点「导出到文件」，在分享菜单选「存储到文件」→ iCloud Drive，始终覆盖同一个 danish-vocab.json 即可。换设备或数据丢失时，用「导入」选这个文件。</p>
+  <div class="row"><button id="exp">导出到文件</button><button id="imp">导入</button></div>
+  <input id="file" type="file" accept=".json" hidden>
+  <div class="mute" id="storage" style="white-space:pre-wrap"></div>
+  <div class="mute" id="setlog"></div>
+</section>
+</main>
+
+<div id="toast" role="status"></div>
+
+<nav>
+  <button data-t="lib">词库</button>
+  <button data-t="rev">复习<span class="badge" id="revbadge"></span></button>
+  <button data-t="set">设置</button>
+</nav>
+
+<script src="js/util.js"></script>
+<script src="js/store.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/api.js"></script>
+<script src="js/srs.js"></script>
+<script src="js/card-view.js"></script>
+<script src="js/views/add.js"></script>
+<script src="js/views/library.js"></script>
+<script src="js/views/review.js"></script>
+<script src="js/views/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
